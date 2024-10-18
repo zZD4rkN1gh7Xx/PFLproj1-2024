@@ -64,7 +64,7 @@ rome rodemap = Data.List.map fst pair_list
         pair_list = Data.List.filter (\(a,b) -> b == maxValue) adj_list
 
 {-///////////////////////////////////////////////////////////////////////////////////////////////
--- 7 
+-- 7 DONE
 ///////////////////////////////////////////////////////////////////////////////////////////////-}
 
 --começar por o 1 do grafo, e ir procurar todos a quem ele esta conectado; criar uma especie de queue em que guardamos 
