@@ -37,7 +37,7 @@ distance roadmap city1 city2
 
 
 {-///////////////////////////////////////////////////////////////////////////////////////////////
--- DONE
+-- 4 DONE
 ///////////////////////////////////////////////////////////////////////////////////////////////-}
 adjacent :: RoadMap -> City -> [(City,Distance)]
 adjacent  roadmap start_city = [(end,distance)| (start, end, distance) <- roadmap ,start == start_city] ++ [(start,distance)| (start, end, distance) <- roadmap ,end == start_city]
@@ -66,8 +66,11 @@ rome rodemap = Data.List.map fst pair_list
 {-///////////////////////////////////////////////////////////////////////////////////////////////
 -- 7 
 ///////////////////////////////////////////////////////////////////////////////////////////////-}
+
+--começar por o 1 do grafo, e ir procurar todos a quem ele esta conectado; criar uma especie de queue em que guardamos 
+
 isStronglyConnected :: RoadMap -> Bool
-isStronglyConnected = undefined
+isStronglyConnected roadmap = Data.List.length (cities roadmap) == Data.List.length (bfsCities roadmap) 
 
 {-///////////////////////////////////////////////////////////////////////////////////////////////
 -- 8 
@@ -89,7 +92,7 @@ addMaybe :: Num a => Maybe a -> Maybe a -> Maybe a
 addMaybe (Just x) (Just y) = Just (x + y)
 addMaybe _ _ = Nothing 
 
-cityAdjacencyList :: RoadMap -> [(City, Int)]
+cityAdjacencyList :: RoadMap -> [(City, Int)] --cidade e o numero de cidades que la ligam
 cityAdjacencyList roadmap = [(city, length (adjacent roadmap city)) | city <- city_list]
     where 
         city_list = cities roadmap  
@@ -97,6 +100,16 @@ cityAdjacencyList roadmap = [(city, length (adjacent roadmap city)) | city <- ci
 maxBySecond :: Ord b => [(a, b)] -> (a, b)
 maxBySecond = Data.List.maximumBy (Data.Ord.comparing snd)
 
+bfsCities :: RoadMap -> [City]
+bfsCities ((start_city,end_city,dist) : rest) = Data.List.nub( auxBfsCities ((start_city,end_city, dist) : rest) [start_city] [] )
+ 
+auxBfsCities :: RoadMap -> [City] -> [City] -> [City]
+auxBfsCities _ [] visited = visited
+auxBfsCities roadmap (current:rest) visited 
+    | Data.List.elem current visited = auxBfsCities roadmap rest visited
+    | otherwise = 
+        let neighbors = map fst (adjacent roadmap current)
+        in auxBfsCities roadmap (rest ++ neighbors) (current : visited)
 
 {-///////////////////////////////////////////////////////////////////////////////////////////////
 -NA
@@ -116,3 +129,6 @@ gTest2 = [("0","1",10),("0","2",15),("0","3",20),("1","2",35),("1","3",25),("2",
 
 gTest3 :: RoadMap -- unconnected graph
 gTest3 = [("0","1",4),("2","3",2)]
+
+gTest4 :: RoadMap
+gTest4 = [("A", "B", 5), ("C", "D", 3), ("E", "F", 7)]
