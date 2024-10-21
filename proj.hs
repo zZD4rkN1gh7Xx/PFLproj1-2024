@@ -1,7 +1,7 @@
 import qualified Data.List
 import qualified Data.Array
 import qualified Data.Bits
-import qualified Data.Ord
+
 
 -- PFL 2024/2025 Practical assignment 1
 
@@ -37,7 +37,7 @@ distance roadmap city1 city2
 
 
 {-///////////////////////////////////////////////////////////////////////////////////////////////
--- 4 DONE
+-- 4 DONE-- podemos encontrar soulçoes mais simples
 ///////////////////////////////////////////////////////////////////////////////////////////////-}
 adjacent :: RoadMap -> City -> [(City,Distance)]
 adjacent  roadmap start_city = [(end,distance)| (start, end, distance) <- roadmap ,start == start_city] ++ [(start,distance)| (start, end, distance) <- roadmap ,end == start_city]
@@ -64,19 +64,75 @@ rome rodemap = Data.List.map fst pair_list
         pair_list = Data.List.filter (\(a,b) -> b == maxValue) adj_list
 
 {-///////////////////////////////////////////////////////////////////////////////////////////////
--- 7 DONE
+-- 7 DONE--começar por o 1 do grafo, e ir procurar todos a quem ele esta conectado; criar uma especie de queue em que guardamos 
 ///////////////////////////////////////////////////////////////////////////////////////////////-}
-
---começar por o 1 do grafo, e ir procurar todos a quem ele esta conectado; criar uma especie de queue em que guardamos 
 
 isStronglyConnected :: RoadMap -> Bool
 isStronglyConnected roadmap = Data.List.length (cities roadmap) == Data.List.length (bfsCities roadmap) 
 
+
 {-///////////////////////////////////////////////////////////////////////////////////////////////
 -- 8 
 ///////////////////////////////////////////////////////////////////////////////////////////////-}
+
+
+
+
+
+
+
+--memo: during dijkstra's we choose the samallest path with an unvisited node
 shortestPath :: RoadMap -> City -> City -> [Path]
-shortestPath = undefined
+shortestPath roadmap c_start c_end = auxShortestPath roadmap c_start c_end (setinitialDistance roadmap c_start)
+
+
+auxShortestPath :: RoadMap -> City -> City -> [(City,Distance)] -> [Path] --distanceList ja presume visited
+auxShortestPath roadmap c1 c2 distanceList  
+    | c1 == c2 = []
+    | otherwise = []
+
+
+
+
+
+setinitialDistance :: RoadMap -> City -> [(City,Distance)]
+setinitialDistance roadmap start_city = [(city, distance) | city <- cities roadmap, let distance = if city == start_city then 0 else maxBound :: Int]
+
+ -- Initialize distances to infinity for all nodes except the start node
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 {-///////////////////////////////////////////////////////////////////////////////////////////////
 -- 9 
@@ -96,9 +152,10 @@ cityAdjacencyList :: RoadMap -> [(City, Int)] --cidade e o numero de cidades que
 cityAdjacencyList roadmap = [(city, length (adjacent roadmap city)) | city <- city_list]
     where 
         city_list = cities roadmap  
-
+    
+--useless as of yet
 maxBySecond :: Ord b => [(a, b)] -> (a, b)
-maxBySecond = Data.List.maximumBy (Data.Ord.comparing snd)
+maxBySecond = Data.List.maximumBy (\(_, b1) (_, b2) -> compare b1 b2)
 
 bfsCities :: RoadMap -> [City]
 bfsCities ((start_city,end_city,dist) : rest) = Data.List.nub( auxBfsCities ((start_city,end_city, dist) : rest) [start_city] [] )
@@ -110,6 +167,20 @@ auxBfsCities roadmap (current:rest) visited
     | otherwise = 
         let neighbors = map fst (adjacent roadmap current)
         in auxBfsCities roadmap (rest ++ neighbors) (current : visited)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 {-///////////////////////////////////////////////////////////////////////////////////////////////
 -NA
@@ -130,5 +201,6 @@ gTest2 = [("0","1",10),("0","2",15),("0","3",20),("1","2",35),("1","3",25),("2",
 gTest3 :: RoadMap -- unconnected graph
 gTest3 = [("0","1",4),("2","3",2)]
 
+--added 
 gTest4 :: RoadMap
 gTest4 = [("A", "B", 5), ("C", "D", 3), ("E", "F", 7)]
