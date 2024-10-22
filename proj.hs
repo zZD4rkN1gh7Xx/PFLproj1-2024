@@ -80,7 +80,7 @@ isStronglyConnected roadmap = Data.List.length (cities roadmap) == Data.List.len
 
 --memo: during dijkstra's we choose the samallest path with an unvisited node
 shortestPath :: RoadMap -> City -> City -> [Path]
-shortestPath roadmap c_start c_end = auxShortestPath roadmap c_start c_end (setinitialDistance roadmap c_start)
+shortestPath roadmap c_start c_end =  getPaths (auxShortestPath roadmap c_start c_end (setinitialDistance roadmap c_start))
 
 
 auxShortestPath :: RoadMap -> City -> City -> [(City,Distance)] -> [Path] --distanceList ja presume visited
@@ -97,15 +97,30 @@ setinitialDistance :: RoadMap -> City -> [(City,Distance)]
 setinitialDistance roadmap start_city = [(city, distance) | city <- cities roadmap, let distance = if city == start_city then 0 else maxBound :: Int]
 
 -- update paths
-updatePaths :: City -> Distance -> [(City,Distance)] -> [(City,Distance)]
-updatePaths city newDist [] = [(city, newDist)]  
-updatePaths city newDist ((c,d): rest)
-    |city == c && newDist <= d = ((c,newDist) : rest)
-    |city == c && newDist > d = ((c,d): rest)
-    |otherwise = (c, d) : updatePaths city newDist rest 
+updateDistance :: City -> Distance -> [(City,Distance)] -> [(City,Distance)]
+updateDistance city newDist [] = [(city, newDist)]  
+updateDistance city newDist ((c,d): rest)
+    |city == c && newDist <= d = (c,newDist) : rest
+    |city == c && newDist > d = (c,d): rest
+    |otherwise = (c, d) : updateDistance city newDist rest 
 
---currentDistance :: City -> [(City,Distance)] -> Distance
---currentDistance City ((c,d): rest) = 
+currentDistance :: City -> [(City,Distance)] -> Distance
+currentDistance city ((c,d): rest) 
+    | city == c = d
+    | otherwise = currentDistance city rest
+
+setPrev :: City -> City -> [(City, City)] -> [(City, City)] 
+setPrev start end prevs = (end,start) : prevs
+
+getPaths :: City -> [(City, City)] -> [Path]
+getPaths city_start city_pairs
+    | null nextCities = [[city_start]]
+    | otherwise = concatMap (\(city_end, _) -> map (city_start :) (getPaths city_end city_pairs)) nextCities
+  where
+    nextCities = findNextCities city_start city_pairs  
+
+findNextCities :: City -> [(City, City)] -> [(City, City)]
+findNextCities city_start city_pairs = Data.List.filter (\(_, city_from) -> city_from == city_start) city_pairs
 
 
 
@@ -212,27 +227,3 @@ gTest4 = [("A", "B", 5), ("C", "D", 3), ("E", "F", 7)]
 
 
 
-
-
-
-
-
-main :: IO ()
-main = do
-    let paths = [("Paris", 5), ("London", 10), ("Berlin", 15)]
-    
-    -- Test case 1: Updating Berlin with a smaller distance
-    let result1 = updatePaths "Berlin" 12 paths
-    putStrLn $ "Test 1 (Update Berlin with 12): " ++ show result1
-
-    -- Test case 2: Adding a new city (Rome)
-    let result2 = updatePaths "Rome" 8 paths
-    putStrLn $ "Test 2 (Add Rome with 8): " ++ show result2
-
-    -- Test case 3: Updating a city with a greater distance (London remains unchanged)
-    let result3 = updatePaths "London" 20 paths
-    putStrLn $ "Test 3 (Update London with 20): " ++ show result3
-
-    -- Test case 4: Adding another city (Madrid)
-    let result4 = updatePaths "Madrid" 9 paths
-    putStrLn $ "Test 4 (Add Madrid with 9): " ++ show result4
