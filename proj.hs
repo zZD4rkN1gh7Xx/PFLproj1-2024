@@ -78,9 +78,6 @@ isStronglyConnected roadmap = Data.List.length (cities roadmap) == Data.List.len
 
 
 
-
-
-
 --memo: during dijkstra's we choose the samallest path with an unvisited node
 shortestPath :: RoadMap -> City -> City -> [Path]
 shortestPath roadmap c_start c_end = auxShortestPath roadmap c_start c_end (setinitialDistance roadmap c_start)
