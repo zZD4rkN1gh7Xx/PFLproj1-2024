@@ -92,12 +92,20 @@ auxShortestPath roadmap c1 c2 distanceList
 
 
 
+ -- Initialize distances to infinity for all nodes except the start node
 setinitialDistance :: RoadMap -> City -> [(City,Distance)]
 setinitialDistance roadmap start_city = [(city, distance) | city <- cities roadmap, let distance = if city == start_city then 0 else maxBound :: Int]
 
- -- Initialize distances to infinity for all nodes except the start node
+-- update paths
+updatePaths :: City -> Distance -> [(City,Distance)] -> [(City,Distance)]
+updatePaths city newDist [] = [(city, newDist)]  
+updatePaths city newDist ((c,d): rest)
+    |city == c && newDist <= d = ((c,newDist) : rest)
+    |city == c && newDist > d = ((c,d): rest)
+    |otherwise = (c, d) : updatePaths city newDist rest 
 
-
+--currentDistance :: City -> [(City,Distance)] -> Distance
+--currentDistance City ((c,d): rest) = 
 
 
 
@@ -201,3 +209,30 @@ gTest3 = [("0","1",4),("2","3",2)]
 --added 
 gTest4 :: RoadMap
 gTest4 = [("A", "B", 5), ("C", "D", 3), ("E", "F", 7)]
+
+
+
+
+
+
+
+
+main :: IO ()
+main = do
+    let paths = [("Paris", 5), ("London", 10), ("Berlin", 15)]
+    
+    -- Test case 1: Updating Berlin with a smaller distance
+    let result1 = updatePaths "Berlin" 12 paths
+    putStrLn $ "Test 1 (Update Berlin with 12): " ++ show result1
+
+    -- Test case 2: Adding a new city (Rome)
+    let result2 = updatePaths "Rome" 8 paths
+    putStrLn $ "Test 2 (Add Rome with 8): " ++ show result2
+
+    -- Test case 3: Updating a city with a greater distance (London remains unchanged)
+    let result3 = updatePaths "London" 20 paths
+    putStrLn $ "Test 3 (Update London with 20): " ++ show result3
+
+    -- Test case 4: Adding another city (Madrid)
+    let result4 = updatePaths "Madrid" 9 paths
+    putStrLn $ "Test 4 (Add Madrid with 9): " ++ show result4
