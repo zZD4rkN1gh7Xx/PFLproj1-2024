@@ -78,25 +78,25 @@ isStronglyConnected roadmap = Data.List.length (cities roadmap) == Data.List.len
 
 
 
---memo: during dijkstra's we choose the samallest path with an unvisited node
+
 shortestPath :: RoadMap -> City -> City -> [Path]
-shortestPath roadmap c_start c_end =  getPaths c_start (auxShortestPath roadmap c_start c_end (setinitialDistance roadmap c_start))
+shortestPath roadmap c_start c_end =  getPaths c_start c_end (auxShortestPath roadmap c_start c_end [c_start] (setinitialDistance roadmap c_start)) -- vai fazer o get paths que vai lidar com os prevs encontrados no auxhortest paths
+
+--graf, startCity,endCity,queue,cityDistanceList,current_previousList -> final_previousList
+auxShortestPath :: RoadMap -> City -> City -> [City] -> [(City,Distance)] -> [(City,City)]-> [(City,City)] -- vai ter como input roadmap cidade inicial, final, queue, a distancias atuais das cidades e vai dar return dos prevs de cada um.
+auxShortestPath roadmap startCity endCity (current:rest) distanceList current_previousList  
+    | startCity == endCity = [(startCity,startCity)] 
+    | cond 
+    
+    auxShortestPath roadmap c1 c2 (rest ++ neighbors) (updateDistance neighbours) -- aqui no in e so chamar a funçao utra vez mas com os inputs das listas atualizadas
+        where
+            neighbours = map fst (adjacent roadmap current)
+            currentDistance = getDist_fromDistanceList current distanceList
+            
+            filteredNeighboursList = [ usefullNeighbour | usefullNeighbour <- neighbors, (getDist_fromDistanceList usefullNeighbour distanceList) >= (currentDistance) + (distance roadmap current usefullNeighbour)]
 
 
-auxShortestPath :: RoadMap -> City -> City -> [(City,Distance)] -> [(City,City)] --distanceList ja presume visited
-auxShortestPath roadmap c1 c2 distanceList  
-    | c1 == c2 = []
-    | otherwise = []
 
-
-
-
-
- -- Initialize distances to infinity for all nodes except the start node
-setinitialDistance :: RoadMap -> City -> [(City,Distance)]
-setinitialDistance roadmap start_city = [(city, distance) | city <- cities roadmap, let distance = if city == start_city then 0 else maxBound :: Int]
-
--- update paths
 updateDistance :: City -> Distance -> [(City,Distance)] -> [(City,Distance)]
 updateDistance city newDist [] = [(city, newDist)]  
 updateDistance city newDist ((c,d): rest)
@@ -104,26 +104,34 @@ updateDistance city newDist ((c,d): rest)
     |city == c && newDist > d = (c,d): rest
     |otherwise = (c, d) : updateDistance city newDist rest 
 
-currentDistance :: City -> [(City,Distance)] -> Distance
-currentDistance city ((c,d): rest) 
+getDist_fromDistanceList :: City -> [(City,Distance)] -> Distance
+getDist_fromDistanceList city ((c,d): rest) 
     | city == c = d
-    | otherwise = currentDistance city rest
+    | otherwise = getDist_fromDistanceList city rest
 
 setPrev :: City -> City -> [(City, City)] -> [(City, City)] 
 setPrev start end prevs = (end,start) : prevs
 
-getPaths :: City -> [(City, City)] -> [Path]
-getPaths city_start city_pairs
-    | null nextCities = [[city_start]]
-    | otherwise = concatMap (\(city_end, _) -> map (city_start :) (getPaths city_end city_pairs)) nextCities
-  where
-    nextCities = findNextCities city_start city_pairs  
 
-findNextCities :: City -> [(City, City)] -> [(City, City)]
-findNextCities city_start city_pairs = Data.List.filter (\(_, city_from) -> city_from == city_start) city_pairs
+findPrevCities :: City -> [(City, City)] -> [(City, City)]
+findPrevCities city_start city_pairs = filter (\(city, _) -> city == city_start) city_pairs
 
 
+-- ////////////////////////////////// DONT WORRY WITH THIS ////////////////////////////
 
+ -- Initialize distances to infinity for all nodes except the start node
+ -- so serve para a chamada da aux
+setinitialDistance :: RoadMap -> City -> [(City,Distance)]
+setinitialDistance roadmap start_city = [(city, distance) | city <- cities roadmap, let distance = if city == start_city then 0 else maxBound :: Int]
+
+-- vai buscar os paths melhores para a cidade que queremos.
+getPaths :: City -> City -> [(City, City)] -> [Path]
+getPaths city_start city_end city_pairs
+    | city_start == city_end = [[city_end]]
+    | null prevCities = []
+    | otherwise = concatMap (\(current_city, prev_city) -> map (city_start :) (getPaths prev_city city_end city_pairs)) prevCities
+    where
+    prevCities = findPrevCities city_start city_pairs 
 
 
 
