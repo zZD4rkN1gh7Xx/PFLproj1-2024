@@ -3,6 +3,7 @@ import qualified Data.Array
 import qualified Data.Bits
 
 
+
 -- PFL 2024/2025 Practical assignment 1
 
 -- Uncomment the some/all of the first three lines to import the modules, do not change the code of these lines.
@@ -76,75 +77,82 @@ isStronglyConnected roadmap = Data.List.length (cities roadmap) == Data.List.len
 ///////////////////////////////////////////////////////////////////////////////////////////////-}
 
 
-
-
-
 shortestPath :: RoadMap -> City -> City -> [Path]
-shortestPath roadmap c_start c_end =  getPaths c_start c_end (auxShortestPath roadmap c_start c_end [c_start] (setinitialDistance roadmap c_start)) -- vai fazer o get paths que vai lidar com os prevs encontrados no auxhortest paths
+shortestPath roadmap c_start c_end =  getPaths c_end c_start (auxShortestPath roadmap c_start c_end [c_start] (setinitialDistance roadmap c_start) []) -- vai fazer o get paths que vai lidar com os prevs encontrados no auxhortest paths
 
 --graf, startCity,endCity,queue,cityDistanceList,current_previousList -> final_previousList
-auxShortestPath :: RoadMap -> City -> City -> [City] -> [(City,Distance)] -> [(City,City)]-> [(City,City)] -- vai ter como input roadmap cidade inicial, final, queue, a distancias atuais das cidades e vai dar return dos prevs de cada um.
+auxShortestPath :: RoadMap -> City -> City -> [City] -> [(City,Maybe Distance)] -> [(City,City)]-> [(City,City)] -- vai ter como input roadmap cidade inicial, final, queue, a distancias atuais das cidades e vai dar return dos prevs de cada um.
+auxShortestPath roadmap _ _ [] _ current_previousList = current_previousList
 auxShortestPath roadmap startCity endCity (current:rest) distanceList current_previousList  
     | startCity == endCity = [(startCity,startCity)] 
-    | cond 
-    
-    auxShortestPath roadmap c1 c2 (rest ++ neighbors) (updateDistance neighbours) -- aqui no in e so chamar a funçao utra vez mas com os inputs das listas atualizadas
+    | otherwise = auxShortestPath roadmap startCity endCity (rest ++ filteredNeighboursList) new_dist new_prev_list -- aqui no in e so chamar a funçao outra vez mas com o a queue, prev atualizados
         where
             neighbours = map fst (adjacent roadmap current)
             currentDistance = getDist_fromDistanceList current distanceList
             
-            filteredNeighboursList = [ usefullNeighbour | usefullNeighbour <- neighbors, (getDist_fromDistanceList usefullNeighbour distanceList) >= (currentDistance) + (distance roadmap current usefullNeighbour)]
+            --get usefull neighbours: neighbours whose distances can be made smaller
+            filteredNeighboursList = [ usefullNeighbour | usefullNeighbour <- neighbours, getDist_fromDistanceList usefullNeighbour distanceList > addMaybe currentDistance (distance roadmap current usefullNeighbour)]
+            
+            --update all distances of the usefull neighbours in distance list
+            new_dist = foldl (\newDistList usefulNeighbour ->
+                    let newDist = addMaybe currentDistance  (distance roadmap current usefulNeighbour)
+                    in updateDistance usefulNeighbour newDist newDistList
+                ) distanceList filteredNeighboursList
+                
+            new_prev_list = foldl (\newPrevList filtered_neighbour -> updatePrevList roadmap distanceList current filtered_neighbour newPrevList) current_previousList filteredNeighboursList
+
+
+updateDistance :: City -> Maybe Distance -> [(City, Maybe Distance)] -> [(City, Maybe Distance)]
+updateDistance city newDist cityDistances = map (\(c, d) -> if c == city then (c, newDist) else (c, d)) cityDistances
 
 
 
-updateDistance :: City -> Distance -> [(City,Distance)] -> [(City,Distance)]
-updateDistance city newDist [] = [(city, newDist)]  
-updateDistance city newDist ((c,d): rest)
-    |city == c && newDist <= d = (c,newDist) : rest
-    |city == c && newDist > d = (c,d): rest
-    |otherwise = (c, d) : updateDistance city newDist rest 
-
-getDist_fromDistanceList :: City -> [(City,Distance)] -> Distance
+getDist_fromDistanceList :: City -> [(City,Maybe Distance)] -> Maybe Distance
 getDist_fromDistanceList city ((c,d): rest) 
-    | city == c = d
-    | otherwise = getDist_fromDistanceList city rest
-
-setPrev :: City -> City -> [(City, City)] -> [(City, City)] 
-setPrev start end prevs = (end,start) : prevs
+    | city == c = d --found what we wanted, return it
+    | otherwise = getDist_fromDistanceList city rest--go through the list
 
 
-findPrevCities :: City -> [(City, City)] -> [(City, City)]
-findPrevCities city_start city_pairs = filter (\(city, _) -> city == city_start) city_pairs
+updatePrevList :: RoadMap -> [(City, Maybe Distance)] -> City -> City -> [(City, City)] -> [(City, City)]
+updatePrevList roadmap distanceList current neighbour prevList =
+    let
+        currentDistance = getDist_fromDistanceList current distanceList-- calculate the distance from the starting city to the current city
+        distanceToNeighbour = distance roadmap current neighbour -- calculate the distance from current to neighbour
+        newDistance = addMaybe currentDistance distanceToNeighbour -- calculate the new potential distance to neighbour through current
+        neighbourDistance = getDist_fromDistanceList neighbour distanceList -- get the neighbour's current known distance from distanceList
+    in
+        case (newDistance, neighbourDistance) of
+        (Just dNew, Just dNeighbour)
+            | dNew < dNeighbour -> 
+                -- if new distance is shorter, remove previous entries for neighbour and add the new one
+                (neighbour, current) : filter ((/= neighbour) . fst) prevList
+
+            | dNew == dNeighbour -> 
+                -- if new distance is equal, add the new predecessor without removing existing entries
+                (neighbour, current) : prevList
+
+        _ -> prevList  -- case of Nothing, return prevList unchanged
 
 
--- ////////////////////////////////// DONT WORRY WITH THIS ////////////////////////////
+-- initialize distances to infinity for all nodes except the start node
+-- so serve para a chamada da aux
+setinitialDistance :: RoadMap -> City -> [(City,Maybe Distance)]
+setinitialDistance roadmap start_city = [(city, distance) | city <- cities roadmap, let distance = if city == start_city then Just 0 else Just (maxBound :: Int)]
 
- -- Initialize distances to infinity for all nodes except the start node
- -- so serve para a chamada da aux
-setinitialDistance :: RoadMap -> City -> [(City,Distance)]
-setinitialDistance roadmap start_city = [(city, distance) | city <- cities roadmap, let distance = if city == start_city then 0 else maxBound :: Int]
 
--- vai buscar os paths melhores para a cidade que queremos.
 getPaths :: City -> City -> [(City, City)] -> [Path]
-getPaths city_start city_end city_pairs
-    | city_start == city_end = [[city_end]]
-    | null prevCities = []
-    | otherwise = concatMap (\(current_city, prev_city) -> map (city_start :) (getPaths prev_city city_end city_pairs)) prevCities
+getPaths city_end city_start city_pairs
+    | city_end == city_start = [[city_end]]  -- Base case: reached the destination
+    | null prevCities = []                     -- No paths if no predecessors
+    | otherwise = (concatMap (\prev_city ->
+        let paths = getPaths prev_city city_start city_pairs
+        in map (city_end :) paths) prevCities)
     where
-    prevCities = findPrevCities city_start city_pairs 
+        prevCities = findPrevCities city_end city_pairs
 
-
-
-
-
-
-
-
-
-
-
-
-
+-- Find predecessor cities of `city_start` in the list of city pairs
+findPrevCities :: City -> [(City, City)] -> [City]
+findPrevCities city city_pairs = [prev_city | (current_city, prev_city) <- city_pairs, current_city == city]
 
 
 
@@ -231,7 +239,10 @@ gTest3 = [("0","1",4),("2","3",2)]
 
 --added 
 gTest4 :: RoadMap
-gTest4 = [("A", "B", 5), ("C", "D", 3), ("E", "F", 7)]
+gTest4 = [("A", "B", 5), ("C", "B", 5), ("C", "D", 3), ("E", "F", 7)]
 
+gTest5 :: RoadMap
+gTest5 = [("A", "B", 2), ("A", "C", 4), ("B", "C", 5),("B", "K", 7),("B", "F", 20),("C" , "F" ,8),("K" , "E" ,1),("E", "F",2)]
+--best path F E K B A
 
 
