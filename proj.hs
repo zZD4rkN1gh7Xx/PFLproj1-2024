@@ -2,9 +2,15 @@ import qualified Data.List
 import qualified Data.Array
 import qualified Data.Bits
 
-import Data.Maybe
+type City = String
+type Path = [City]
+type Distance = Int
 
+type RoadMap = [(City,City,Distance)]
 
+-- AUX Types
+type AdjacencyMatrix = Data.Array.Array (Int,Int)  (Maybe Distance)
+type MemoTable = Data.Array.Array (Int, Int)  (Maybe Distance)
 
 
 -- PFL 2024/2025 Practical assignment 1
@@ -13,7 +19,7 @@ import Data.Maybe
 
 
 {-///////////////////////////////////////////////////////////////////////////////////////////////
--- 1 (could add a sort for pretty conus) DONE
+-- 1 DONE
 ///////////////////////////////////////////////////////////////////////////////////////////////-}
 cities :: RoadMap -> [City]
 cities roadmap = Data.List.nub [city | (start, end, _) <- roadmap, city <- [start, end]]
@@ -69,6 +75,17 @@ rome rodemap = Data.List.map fst pair_list
 isStronglyConnected :: RoadMap -> Bool
 isStronglyConnected roadmap = Data.List.length (cities roadmap) == Data.List.length (bfsCities roadmap) 
 
+bfsCities :: RoadMap -> [City]
+bfsCities ((start_city,end_city,dist) : rest) = Data.List.nub( auxBfsCities ((start_city,end_city, dist) : rest) [start_city] [] )
+ 
+auxBfsCities :: RoadMap -> [City] -> [City] -> [City]
+auxBfsCities _ [] visited = visited
+auxBfsCities roadmap (current:rest) visited 
+    | Data.List.elem current visited = auxBfsCities roadmap rest visited
+    | otherwise = 
+        let neighbors = map fst (adjacent roadmap current)
+        in auxBfsCities roadmap (rest ++ neighbors) (current : visited)
+
 
 {-///////////////////////////////////////////////////////////////////////////////////////////////
 -- 8 
@@ -77,6 +94,7 @@ isStronglyConnected roadmap = Data.List.length (cities roadmap) == Data.List.len
 
 shortestPath :: RoadMap -> City -> City -> [Path]
 shortestPath roadmap c_start c_end =  getPaths c_end c_start (auxShortestPath roadmap c_start c_end [c_start] (setinitialDistance roadmap c_start) []) -- vai fazer o get paths que vai lidar com os prevs encontrados no auxhortest paths
+
 
 --graf, startCity,endCity,queue,cityDistanceList,current_previousList -> final_previousList
 auxShortestPath :: RoadMap -> City -> City -> [City] -> [(City,Maybe Distance)] -> [(City,City)]-> [(City,City)] -- vai ter como input roadmap cidade inicial, final, queue, a distancias atuais das cidades e vai dar return dos prevs de cada um.
@@ -156,27 +174,18 @@ findPrevCities city city_pairs = [prev_city | (current_city, prev_city) <- city_
 {-///////////////////////////////////////////////////////////////////////////////////////////////
 -- 9 
 ///////////////////////////////////////////////////////////////////////////////////////////////-}
-type City = String
-type Path = [City]
-type Distance = Int
 
-type RoadMap = [(City,City,Distance)]
 
--- AUX Types
-type AdjacencyMatrix = Data.Array.Array (Int,Int)  (Maybe Distance)
-type MemoTable = Data.Array.Array (Int, Int)  (Maybe Distance)
-
--- TO DOOOOOOOOOOOOOOOOOOOOOO
 
 travelSales :: RoadMap -> Path
 travelSales roadmap
-    | isStronglyConnected roadmap = auxTravelSales roadmap
-    | otherwise = []
+   | isStronglyConnected roadmap = auxTravelSales roadmap
+   | otherwise = []
 
--- Main function to initiate TSP solving and reconstruct path
-
+--auxTravelSales :: RoadMap -> MemoTable
+--auxTravelSales roadmap = solvedMemoTable
 auxTravelSales :: RoadMap -> Path
-auxTravelSales roadmap = reconstructPath startIndex cityIndicesList solvedMemoTable
+auxTravelSales roadmap = tour_path
   where
     -- Step 1: Convert roadmap to city indices and adjacency matrix - DONE
     cityIndicesList = cityIndices roadmap
@@ -184,101 +193,95 @@ auxTravelSales roadmap = reconstructPath startIndex cityIndicesList solvedMemoTa
     startCity = firstCity roadmap
     startIndex = getCityIndex cityIndicesList startCity
     adjacencyMatrix = toAdjacencyMatrix roadmap
-    -- Step 2: Initialize memo table - DONE 
+
+    --Step 2: Initialize memo table - DONE 
     initialMemoTable = Data.Array.array ((0, 0), (numCities - 1, Data.Bits.shiftL 1 numCities - 1))[((i, j), Just maxBound) | i <- [0..numCities-1], j <- [0..Data.Bits.shiftL 1 numCities - 1]]
     memoTable = initMemoTable adjacencyMatrix initialMemoTable startCity cityIndicesList
 
     --Step 3: updates memo with the optimal values of all neighbour/start edges - DONE
     set_up = setup adjacencyMatrix memoTable startIndex numCities -- set up da memo table
    
-    -- Step 4: Solve TSP to find the minimum path cost
+    --Step 4: calculate all permutaions of tours & partial tours, add them to the memoTable -D ONE
     solvedMemoTable = solveTsp adjacencyMatrix set_up startIndex numCities
 
-    -- Step 5: Reconstruct path from memo table
-    --bestPathIndices = reconstructPathIndices adjacencyMatrix memoTable startIndex numCities 
+    --Step 5: Reconstruct path from memo table using indeces
+    optimal = findOptimalTour adjacencyMatrix solvedMemoTable startIndex numCities
 
-----------------------------------------------------------------
---TESTING ZONE
-----------------------------------------------------------------
+    --Step 6: convert to path - DONE
+    tour_path = toPath optimal cityIndicesList
 
+
+--calculates all the combinations of paths with DP
 solveTsp :: AdjacencyMatrix -> MemoTable -> Int -> Int -> MemoTable
-solveTsp matrix memoTable startNode numCities = foldl updateMemo memoTable [3..numCities]
+solveTsp matrix memoTable startNode numCities = foldl updateMemo memoTable [1..(2 ^ numCities - 1)]
   where
-    -- Generate combinations for all subsets of size r (with r starting from 3 up to numCities)
+    -- update memo table for each subset
     updateMemo :: MemoTable -> Int -> MemoTable
-    updateMemo currentMemo r = foldl processSubset currentMemo (generateSubsets r numCities)
-
-    processSubset :: MemoTable -> Int -> MemoTable
-    processSubset currentMemo subset
+    updateMemo currentMemo subset
       | not (isInSubset startNode subset) = currentMemo  -- Skip subsets not containing the start node
-      | otherwise = foldl (processNext currentMemo subset) currentMemo [0..numCities-1]
+      | otherwise = foldl (processEndCity currentMemo subset) currentMemo [0..numCities-1]
 
-    processNext :: MemoTable -> Int -> MemoTable -> Int -> MemoTable
-    processNext currentMemo subset currentMemo' next
-      | next == startNode || not (isInSubset next subset) = currentMemo'
-      | otherwise = foldl (processEndNode currentMemo subset next) currentMemo' [0..numCities-1]
-
-    processEndNode :: MemoTable -> Int -> Int -> MemoTable -> Int -> MemoTable
-    processEndNode currentMemo subset next currentMemo' e
-        | e == startNode || e == next || not (isInSubset e subset) = currentMemo'
-        | otherwise =
-            let state = Data.Bits.xor subset (Data.Bits.shiftL 1 next)
-                currentMemoValue = memo currentMemo e state
-                matrixValue = matrix Data.Array.! (e, next)
-                dist = case (currentMemoValue, matrixValue) of
-                        (Just mv, Just mx) | mv /= maxBound -> Just (mv + mx)
-                        _ -> Nothing  -- If any value is `Nothing` or `mv` is `maxBound`, the result is `Nothing`
-                currentMinDist = memo currentMemo' next subset
-            in case (dist, currentMinDist) of
-                (Just d, Just cm) | d < cm -> currentMemo' Data.Array.// [((next, subset), Just d)]
-                (Just d, Nothing) -> currentMemo' Data.Array.// [((next, subset), Just d)]
+    -- process the end city for a given subset
+    processEndCity :: MemoTable -> Int -> MemoTable -> Int -> MemoTable
+    processEndCity currentMemo subset currentMemo' endCity
+        | endCity == startNode || not (isInSubset endCity subset) = currentMemo'
+        | otherwise = 
+            let state = subset `Data.Bits.xor` (1 `Data.Bits.shiftL` endCity)
+                validPreviousCities = [prevCity | prevCity <- [0..numCities-1], prevCity /= startNode, prevCity /= endCity, isInSubset prevCity subset]
+                newDistances = [ let prevDist = memo currentMemo prevCity state
+                                in case prevDist of
+                                    Just mv -> let edgeDist = matrix Data.Array.! (prevCity, endCity)
+                                        in case edgeDist of
+                                                    Just mx -> max 0 (mv + mx)  -- Ensure we do not get negative
+                                                    Nothing -> maxBound
+                                    Nothing -> maxBound
+                                | prevCity <- validPreviousCities]
+                minDistance = if null newDistances then Nothing else Just (minimum newDistances)
+                currentMinDist = memo currentMemo' endCity subset
+            in case (minDistance, currentMinDist) of
+                (Just d, Nothing) -> currentMemo' Data.Array.// [((endCity, subset), Just d)]
+                (Just d, Just cm) | d < cm -> currentMemo' Data.Array.// [((endCity, subset), Just d)]
                 _ -> currentMemo'
 
-checkSolve :: RoadMap -> MemoTable
-checkSolve roadmap =  solveTsp adjm new_memoTable start_city_index numCities
-    where
-        numCities = Data.List.length (cities roadmap)
-        start_city_index = getCityIndex cityIndicesList startCity
-        startCity = firstCity roadmap
-        cityIndicesList = cityIndices roadmap
-        adjm = toAdjacencyMatrix roadmap
-        
-        new_memoTable = setup adjm initialMemoTable start_city_index numCities
-        
-        initialMemoTable = Data.Array.array ((0, 0), (numCities - 1, Data.Bits.shiftL 1 numCities - 1)) [((i, j), Just maxBound) | i <- [0..numCities-1], j <- [0..Data.Bits.shiftL 1 numCities - 1]]
-        memoTable = initMemoTable adjm initialMemoTable startCity cityIndicesList
 
--- temos de encontrar o melhor caminho e so dps ir buscar o actual path
-reconstructPath :: Int -> [(City, Int)] -> MemoTable -> Path
-reconstructPath startNode cityIndicesList memoTable = tracePath startNode finalSubset []
+-- Finds optimal tour and adds all the indexes of cities said tour into a list, in order
+findOptimalTour :: AdjacencyMatrix -> MemoTable -> Int -> Int -> [Int]
+findOptimalTour matrix memoTable startNode numCities = reverse $ reconstructPath finalCity finalState []
   where
-    numCities = length cityIndicesList
-    finalSubset = (Data.Bits.shiftL 1 numCities) - 1  -- All cities included
+    finalState = (2 ^ numCities - 1)
+    finalCity = startNode
 
-    tracePath :: Int -> Int -> Path -> Path
-    tracePath currentNode subset path
-      | subset == (1 `Data.Bits.shiftL` currentNode) = (fst (cityIndicesList !! currentNode)) : path
-      | otherwise = 
-          case findNextNode currentNode subset of
-              Just next -> tracePath next (subset `Data.Bits.xor` (1 `Data.Bits.shiftL` next)) ((fst (cityIndicesList !! currentNode)) : path)
-              Nothing -> error $ "Path reconstruction failed at node: " ++ show currentNode ++ " with subset: " ++ show subset
+    -- reconstruct the path by backtracking
+    reconstructPath :: Int -> Int -> [Int] -> [Int]
+    reconstructPath city state path
+      | state == 0 = path  -- If we exhausted the state, return the path
+      | otherwise =
+          let previousCity = Data.List.minimumBy (\c1 c2 -> compare (costTo c1) (costTo c2)) validPreviousCities
+              newPath = previousCity : path
+              newState = state `Data.Bits.xor` (1 `Data.Bits.shiftL` previousCity)
+          in reconstructPath previousCity newState newPath
+      where
+        -- get all valid previous cities that are in the current subset
+        validPreviousCities = [prevCity | prevCity <- [0..numCities-1], prevCity /= city, isInSubset prevCity state]
 
-    findNextNode :: Int -> Int -> Maybe Int
-    findNextNode currentNode subset = 
-      let possibleNextNodes = [0..numCities-1]
-          validNextNodes = filter (\next -> next /= currentNode && isInSubset next subset) possibleNextNodes
-          distances = [(next, memoTable Data.Array.! (next, subset)) | next <- validNextNodes]
-          validDistances = [(next, d) | (next, Just d) <- distances, d /= maxBound]
-      in if null validDistances
-         then Nothing
-         else Just . fst $ Data.List.minimumBy (\(_, d1) (_, d2) -> compare d1 d2) validDistances
+        -- calculate the cost to reach the current city from a previous city
+        costTo prevCity = case memoTable Data.Array.! (prevCity, state `Data.Bits.xor` (1 `Data.Bits.shiftL` city)) of
+            Just prevCost -> case matrix Data.Array.! (prevCity, city) of
+                Just edgeCost -> prevCost + edgeCost
+                Nothing -> maxBound
+            Nothing -> maxBound            
+-- helper for findOptimalTour
+isInSubset :: Int -> Int -> Bool
+isInSubset city subset = subset `Data.Bits.testBit` city
 
-    isInSubset :: Int -> Int -> Bool
-    isInSubset i subset = (subset Data.Bits..&. (1 `Data.Bits.shiftL` i)) /= 0
 
--------------------------------------------------
--- FUNCIONA BEM
---------------------------------------------------
+-- Converts a list of indices into a path using a city index list
+toPath::[Int] -> [(City, Int)] -> Path
+toPath optimalPathIndexList cityIndicesList = [fst cityTuple | index <- optimalPathIndexList,  index >= 0, index < length cityIndicesList, let cityTuple = cityIndicesList !! index]
+
+
+
+
 -- creates a adj Matrix out of a roadmap
 toAdjacencyMatrix :: RoadMap -> AdjacencyMatrix
 toAdjacencyMatrix roadmap = Data.Array.array bounds elements
@@ -298,6 +301,8 @@ toAdjacencyMatrix roadmap = Data.Array.array bounds elements
     -- merge default pairs with roadPairs, ensuring symmetry
     elements = foldl (\acc (pos, dist) -> (pos, dist) : filter ((/= pos) . fst) acc) allPairs symmetricPairs
 
+
+--initiates the memo table with infinite values
 setup :: AdjacencyMatrix -> MemoTable -> Int -> Int -> MemoTable
 setup matrix memoTable startNode numCities =
     memoTable Data.Array.// updates
@@ -340,34 +345,34 @@ initMemoTable matrix memoTable startCity cityIndices = memoTable Data.Array.// u
 notIn :: Int -> Int -> Bool
 notIn node visited = (visited Data.Bits..&. Data.Bits.shiftL 1 node) == 0
     
------------------------------------------------------------
--- NOT SURE YET
------------------------------------------------------------
-
--- Recursive TSP solver with memoization
-
-
-
-isInSubset :: Int -> Int -> Bool
-isInSubset i subset = (subset Data.Bits..&. (Data.Bits.shiftL 1 i)) /= 0
-
 generateSubsets :: Int -> Int -> [Int]
 generateSubsets r n = filter (\s -> Data.Bits.popCount s == r) [1..(2^n - 1)]
 
-memo :: MemoTable -> Int -> Int -> Maybe Int
-memo m i s = m Data.Array.! (i, s)
+memo :: MemoTable -> Int -> Int -> Maybe Distance
+memo table city subset = table Data.Array.! (city, subset)
 
+{-///////////////////////////////////////////////////////////////////////////////////////////////
+-- some auxiliars
+///////////////////////////////////////////////////////////////////////////////////////////////-}
+addMaybe :: Num a => Maybe a -> Maybe a -> Maybe a
+addMaybe (Just x) (Just y) = Just (x + y)
+addMaybe _ _ = Nothing 
 
-
+cityAdjacencyList :: RoadMap -> [(City, Int)] --cidade e o numero de cidades que la ligam
+cityAdjacencyList roadmap = [(city, length (adjacent roadmap city)) | city <- city_list]
+    where 
+        city_list = cities roadmap  
 
 ------------------------------------------------------
 -- Funcs used to TO TEST 
 -- printMemoTable (checkSetUp gTest5)
 -- testar o print printAdjacencyMatrix (toAdjacencyMatrix gTeste1) (cityIndices gTeste1)
 ------------------------------------------------------
-
-checkSetUp :: RoadMap -> MemoTable
-checkSetUp roadmap = setup adjm initialMemoTable start_city_index numCities
+--------------------
+--CHECKS /TESTING AREA
+-------------------
+checkSolve :: RoadMap -> MemoTable
+checkSolve roadmap =  solveTsp adjm new_memoTable start_city_index numCities
     where
         numCities = Data.List.length (cities roadmap)
         start_city_index = getCityIndex cityIndicesList startCity
@@ -375,40 +380,13 @@ checkSetUp roadmap = setup adjm initialMemoTable start_city_index numCities
         cityIndicesList = cityIndices roadmap
         adjm = toAdjacencyMatrix roadmap
         
+        new_memoTable = setup adjm initialMemoTable start_city_index numCities
+        
         initialMemoTable = Data.Array.array ((0, 0), (numCities - 1, Data.Bits.shiftL 1 numCities - 1)) [((i, j), Just maxBound) | i <- [0..numCities-1], j <- [0..Data.Bits.shiftL 1 numCities - 1]]
         memoTable = initMemoTable adjm initialMemoTable startCity cityIndicesList
 
-
-
-
-{-
-printMemoTable :: MemoTable -> IO ()
-printMemoTable memoTable = do
-    let ((_, _), (maxCity, maxMask)) = Data.Array.bounds memoTable
-    mapM_ (\(i, mask) -> putStrLn $ "Entry (" ++ show i ++ ", " ++ toBinary mask ++ "): " ++ show (memoTable Data.Array.! (i, mask)))
-          [(i, mask) | i <- [0..maxCity], mask <- [0..maxMask]]
-  where
-    -- Helper function to convert an integer to its binary representation
-    toBinary :: Int -> String
-    toBinary num = showIntAtBase 2 intToDigit num ""
--}
-
 printMemoTable' :: MemoTable -> IO ()
 printMemoTable' memoTable = mapM_ print [((i, bitmask), dist) | ((i, bitmask), dist) <- Data.Array.assocs memoTable]
--------------------------------------------------------------------------------------------------------
-
--- Trace back to reconstruct path indices from memo table
-reconstructPathIndices :: AdjacencyMatrix -> MemoTable -> Int -> Int -> [Int]
-reconstructPathIndices adjacencyMatrix memoTable start numCities = backtrackPath (Data.Bits.shiftL 1 numCities - 1) start []
-  where
-    backtrackPath visited current path
-      | visited == Data.Bits.shiftL 1 numCities - 1 = path ++ [start]
-      | otherwise =
-          let nextNodes = [next | next <- [0..numCities-1], notIn next visited]
-              bestNext = Data.List.minimumBy (\a b -> compare (cost a) (cost b)) nextNodes
-              cost next = addMaybe (adjacencyMatrix Data.Array.! (current, next)) (memoTable Data.Array.! (next, visited Data.Bits..|. Data.Bits.shiftL 1 next))
-          in backtrackPath (visited Data.Bits..|. Data.Bits.shiftL 1 bestNext) bestNext (path ++ [current])
-
 
 printAdjacencyMatrix :: AdjacencyMatrix -> [(City, Int)] -> IO ()
 printAdjacencyMatrix matrix cityIndices = do
@@ -422,36 +400,7 @@ printAdjacencyMatrix matrix cityIndices = do
         let row = [if (i, j) `elem` Data.Array.indices matrix then matrix Data.Array.! (i, j) else Just maxBound | j <- [0 .. numCities - 1]]
         putStrLn $ show (fst (cityIndices !! i)) ++ " | " ++ show row
     
-
-
-
-{-///////////////////////////////////////////////////////////////////////////////////////////////
--- auxiliars
-///////////////////////////////////////////////////////////////////////////////////////////////-}
-addMaybe :: Num a => Maybe a -> Maybe a -> Maybe a
-addMaybe (Just x) (Just y) = Just (x + y)
-addMaybe _ _ = Nothing 
-
-cityAdjacencyList :: RoadMap -> [(City, Int)] --cidade e o numero de cidades que la ligam
-cityAdjacencyList roadmap = [(city, length (adjacent roadmap city)) | city <- city_list]
-    where 
-        city_list = cities roadmap  
-    
---useless as of yet
-maxBySecond :: Ord b => [(a, b)] -> (a, b)
-maxBySecond = Data.List.maximumBy (\(_, b1) (_, b2) -> compare b1 b2)
-
-bfsCities :: RoadMap -> [City]
-bfsCities ((start_city,end_city,dist) : rest) = Data.List.nub( auxBfsCities ((start_city,end_city, dist) : rest) [start_city] [] )
- 
-auxBfsCities :: RoadMap -> [City] -> [City] -> [City]
-auxBfsCities _ [] visited = visited
-auxBfsCities roadmap (current:rest) visited 
-    | Data.List.elem current visited = auxBfsCities roadmap rest visited
-    | otherwise = 
-        let neighbors = map fst (adjacent roadmap current)
-        in auxBfsCities roadmap (rest ++ neighbors) (current : visited)
-
+-------------------------------------------------------------------------------------------------------
 
 {-///////////////////////////////////////////////////////////////////////////////////////////////
 -NA
@@ -474,15 +423,18 @@ gTest3 = [("0","1",4),("2","3",2)]
 
 --added 
 gTest4 :: RoadMap
-gTest4 = [("A", "B", 5), ("C", "B", 5), ("C", "D", 3), ("E", "F", 7)]
+gTest4 = [("A", "B", 5), ("C", "B", 5), ("C", "D", 3), ("E", "F", 7), ("F", "A", 1), ("D", "E", 2)]
 
 gTest5 :: RoadMap
-gTest5 = [("A", "B", 2), ("A", "C", 4), ("B", "C", 5),("B", "K", 7),("B", "F", 20),("C" , "F" ,8),("K" , "E" ,1),("E", "F",2), ("A", "F", 5)]
+gTest5 = [("A", "B", 2), ("A", "C", 4), ("B", "C", 5),("B", "K", 7),("B", "F", 20),("C" , "F" ,8),("K" , "E" ,1),("E", "F",2)]
 --best path F E K B A
 --best tour A B K E F C A -> TOUR COST: 24
 
 gTesy6 :: RoadMap
 gTesy6 = [("A", "B", 10), ("B", "C", 15), ("C", "A", 20)]
+
+gTest7 :: RoadMap
+gTest7 = [("A", "B", 5), ("C", "B", 5), ("C", "D", 3), ("D","A",2)]
 
 mTest1 :: MemoTable
 mTest1 = Data.Array.array ((0, 0), (5, Data.Bits.shiftL 1 5 - 1)) [((i, j), Just maxBound) | i <- [0..5], j <- [0..Data.Bits.shiftL 1 5 - 1]]
